@@ -1,0 +1,39 @@
+{
+  "name": "SrMacedo Puzzles",
+  "short_name": "Puzzles",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "description": "Desafie sua mente com puzzles incríveis.",
+  "icons": [
+    {
+      "src": "/images/tetris.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/tetris.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/images/desktop.png",
+      "sizes": "2286x1242",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Jogando no desktop"
+    },
+    {
+      "src": "/images/mobile.png",
+      "sizes": "798x1066",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Jogando no celular"
+    }
+  ]
+}
