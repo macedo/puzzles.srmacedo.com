@@ -1,200 +1,123 @@
 <!DOCTYPE html>
 <html lang="pt-br">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Sliding Puzzle Touch & Drag</title>
-    <style>
-        :root {
-            --bg: #1a202c;
-            --tile: #2d3748;
-            --accent: #6366f1;
-            --empty: #14171c;
-        }
+    <link rel="stylesheet" href="/css/application.css">
+    <link rel="stylesheet" href="/css/sliding-puzzle.css">
 
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background-color: var(--bg);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            touch-action: none; /* Impede o scroll da página ao arrastar as peças */
-        }
-
-        #game-container {
-            position: relative;
-            width: 320px;
-            height: 320px;
-            background: var(--empty);
-            border-radius: 12px;
-            padding: 10px;
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 10px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
-        }
-
-        .tile {
-            width: 100%;
-            height: 100%;
-            background-color: var(--tile);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: grab;
-            user-select: none;
-            touch-action: none;
-            transition: transform 0.1s linear, background-color 0.2s;
-            box-shadow: inset 0 2px 4px rgba(255,255,255,0.1);
-        }
-
-        .tile:active { cursor: grabbing; scale: 0.95; }
-        .tile.dragging { opacity: 0.8; z-index: 10; border: 2px solid var(--accent); }
-
-        .controls { margin-top: 30px; text-align: center; }
- 
-        button {
-            padding: 12px 24px;
-            background: var(--accent);
-            border: none;
-            color: white;
-            border-radius: 8px;
-            font-weight: bold;
-    cursor: pointer;
-    }
-
-    .back-btn {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    text-decoration: none;
-    color: #94a3b8;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    }
-    .back-btn:hover { color: white; }
-    </style>
-</head>
-<body>
+  </head>
+  <body>
     <a href="/" class="back-btn">← Voltar ao Menu</a>
-    <h2>Puzzle Deslizante</h2>
+    <h2>Sliding Puzzle</h2>
     <div id="game-container"></div>
 
     <div class="controls">
-        <p id="status">Arraste as peças!</p>
-        <button onclick="shuffleBoard()">Reiniciar Jogo</button>
+      <p id="status">Arraste as peças!</p>
+      <button onclick="shuffleBoard()">Reiniciar Jogo</button>
     </div>
 
     <script>
-        const container = document.getElementById('game-container');
-        let tiles = [1, 2, 3, 4, 5, 6, 7, 8, null];
-        const size = 3;
+    const container = document.getElementById('game-container');
+    let tiles = [1, 2, 3, 4, 5, 6, 7, 8, null];
+    const size = 3;
 
-        function render() {
-            container.innerHTML = '';
-            tiles.forEach((value, index) => {
-                const tileDiv = document.createElement('div');
-                tileDiv.className = 'tile' + (value === null ? ' empty' : '');
-                
-                if (value !== null) {
-                    tileDiv.textContent = value;
-                    setupDragEvents(tileDiv, index);
-                } else {
-                    tileDiv.style.visibility = 'hidden';
-                }
-                container.appendChild(tileDiv);
-            });
+    function render() {
+      container.innerHTML = '';
+      tiles.forEach((value, index) => {
+        const tileDiv = document.createElement('div');
+        tileDiv.className = 'tile' + (value === null ? ' empty' : '');
+
+        if (value !== null) {
+          tileDiv.textContent = value;
+          setupDragEvents(tileDiv, index);
+        } else {
+          tileDiv.style.visibility = 'hidden';
         }
+        container.appendChild(tileDiv);
+      });
+    }
 
-        function setupDragEvents(el, index) {
-            let startX, startY;
+    function setupDragEvents(el, index) {
+      let startX, startY;
 
-            el.onpointerdown = (e) => {
-                const emptyIndex = tiles.indexOf(null);
-                if (!isAdjacent(index, emptyIndex)) return;
+      el.onpointerdown = (e) => {
+        const emptyIndex = tiles.indexOf(null);
+        if (!isAdjacent(index, emptyIndex)) return;
 
-                el.setPointerCapture(e.pointerId);
-                el.classList.add('dragging');
-                startX = e.clientX;
-                startY = e.clientY;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('dragging');
+        startX = e.clientX;
+        startY = e.clientY;
 
-                el.onpointermove = (moveEvent) => {
-                    const dx = moveEvent.clientX - startX;
-                    const dy = moveEvent.clientY - startY;
-                    
-                    // Limita o movimento visual ao eixo permitido
-                    const moveDir = getDirection(index, emptyIndex);
-                    if (moveDir === 'h') el.style.transform = `translateX(${dx}px)`;
-                    if (moveDir === 'v') el.style.transform = `translateY(${dy}px)`;
-                };
+        el.onpointermove = (moveEvent) => {
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
 
-                el.onpointerup = (upEvent) => {
-                    el.onpointermove = null;
-                    el.onpointerup = null;
-                    el.classList.remove('dragging');
-                    el.style.transform = '';
+          // Limita o movimento visual ao eixo permitido
+          const moveDir = getDirection(index, emptyIndex);
+          if (moveDir === 'h') el.style.transform = `translateX(${dx}px)`;
+          if (moveDir === 'v') el.style.transform = `translateY(${dy}px)`;
+        };
 
-                    const dist = Math.sqrt(Math.pow(upEvent.clientX - startX, 2) + Math.pow(upEvent.clientY - startY, 2));
-                    
-                    // Se arrastou mais de 30px ou apenas clicou, move a peça
-                    if (dist > 30 || dist < 5) {
-                        moveTile(index);
-                    }
-                };
-            };
-        }
+        el.onpointerup = (upEvent) => {
+          el.onpointermove = null;
+          el.onpointerup = null;
+          el.classList.remove('dragging');
+          el.style.transform = '';
 
-        function isAdjacent(idx1, idx2) {
-            const r1 = Math.floor(idx1 / size), c1 = idx1 % size;
-            const r2 = Math.floor(idx2 / size), c2 = idx2 % size;
-            return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
-        }
+          const dist = Math.sqrt(Math.pow(upEvent.clientX - startX, 2) + Math.pow(upEvent.clientY - startY, 2));
 
-        function getDirection(idx1, idx2) {
-            return Math.floor(idx1 / size) === Math.floor(idx2 / size) ? 'h' : 'v';
-        }
+          // Se arrastou mais de 30px ou apenas clicou, move a peça
+          if (dist > 30 || dist < 5) {
+            moveTile(index);
+          }
+        };
+      };
+    }
 
-        function moveTile(index) {
-            const emptyIndex = tiles.indexOf(null);
-            if (isAdjacent(index, emptyIndex)) {
-                [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
-                render();
-                checkWin();
-            }
-        }
+    function isAdjacent(idx1, idx2) {
+      const r1 = Math.floor(idx1 / size), c1 = idx1 % size;
+      const r2 = Math.floor(idx2 / size), c2 = idx2 % size;
+      return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+    }
 
-        function shuffleBoard() {
-            // Embaralha de forma válida (simulando movimentos)
-            for (let i = 0; i < 200; i++) {
-                const emptyIdx = tiles.indexOf(null);
-                const adj = [];
-                if (emptyIdx % size > 0) adj.push(emptyIdx - 1);
-                if (emptyIdx % size < size - 1) adj.push(emptyIdx + 1);
-                if (emptyIdx >= size) adj.push(emptyIdx - size);
-                if (emptyIdx < size * (size - 1)) adj.push(emptyIdx + size);
-                const randomAdj = adj[Math.floor(Math.random() * adj.length)];
-                [tiles[emptyIdx], tiles[randomAdj]] = [tiles[randomAdj], tiles[emptyIdx]];
-            }
-            render();
-        }
+    function getDirection(idx1, idx2) {
+      return Math.floor(idx1 / size) === Math.floor(idx2 / size) ? 'h' : 'v';
+    }
 
-        function checkWin() {
-            if (tiles.slice(0, -1).every((v, i) => v === i + 1)) {
-                document.getElementById('status').textContent = "🎉 Você venceu!";
-            }
-        }
+    function moveTile(index) {
+      const emptyIndex = tiles.indexOf(null);
+      if (isAdjacent(index, emptyIndex)) {
+        [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
+        render();
+        checkWin();
+      }
+    }
 
-        shuffleBoard();
+    function shuffleBoard() {
+      // Embaralha de forma válida (simulando movimentos)
+      for (let i = 0; i < 200; i++) {
+        const emptyIdx = tiles.indexOf(null);
+        const adj = [];
+        if (emptyIdx % size > 0) adj.push(emptyIdx - 1);
+        if (emptyIdx % size < size - 1) adj.push(emptyIdx + 1);
+        if (emptyIdx >= size) adj.push(emptyIdx - size);
+        if (emptyIdx < size * (size - 1)) adj.push(emptyIdx + size);
+        const randomAdj = adj[Math.floor(Math.random() * adj.length)];
+        [tiles[emptyIdx], tiles[randomAdj]] = [tiles[randomAdj], tiles[emptyIdx]];
+      }
+      render();
+    }
+
+    function checkWin() {
+      if (tiles.slice(0, -1).every((v, i) => v === i + 1)) {
+        document.getElementById('status').textContent = "🎉 Você venceu!";
+      }
+    }
+
+    shuffleBoard();
     </script>
-</body>
+  </body>
 </html>

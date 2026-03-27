@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func main() {
 			return
 		}
 
-		fullPath := "./static/" + path + ".html"
+		fullPath := "./static/" + path
 
 		info, err := os.Stat(fullPath)
 		if err == nil && !info.IsDir() {
@@ -29,7 +30,18 @@ func main() {
 			return
 		}
 
-		if err != nil && !os.IsNotExist(err) {
+		if os.IsNotExist(err) && !strings.HasSuffix(path, ".html") {
+			htmlPath := fullPath + ".html"
+			htmlInfo, htmlErr := os.Stat(htmlPath)
+			if htmlErr == nil && !htmlInfo.IsDir() {
+				http.ServeFile(w, r, htmlPath)
+				return
+			}
+
+			if !os.IsNotExist(htmlErr) {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+		} else if err != nil && !os.IsNotExist(err) {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 

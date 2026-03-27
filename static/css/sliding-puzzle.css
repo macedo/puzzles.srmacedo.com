@@ -1,0 +1,56 @@
+:root {
+  --tile: #2d3748;
+  --empty: #14171c;
+}
+
+body {
+  touch-action: none;
+  justify-content: center;
+}
+
+#game-container {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  background: var(--empty);
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 10px;
+  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+}
+
+.tile {
+  width: 100%;
+  height: 100%;
+  background-color: var(--tile);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.1s linear, background-color 0.2s;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.1);
+}
+
+.tile:active {
+  cursor: grabbing;
+  scale: 0.95;
+}
+
+.tile.dragging { 
+  opacity: 0.8; 
+  z-index: 10; 
+  border: 2px solid var(--primary);
+}
+
+.controls {
+  margin-top: 30px;
+  text-align: center;
+}
