@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Portal de Puzzles</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        h1 { font-size: 2.5rem; margin-bottom: 10px; color: var(--primary); }
+        p { color: #94a3b8; }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            width: 90%;
+            max-width: 1000px;
+            padding: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+            border: 2px solid transparent;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--primary);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .card h2 { margin: 10px 0; font-size: 1.5rem; }
+        
+        .badge {
+            background: var(--primary);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        .locked {
+            opacity: 0.6;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>SrMacedo Puzzles</h1>
+        <p>Desafie sua mente com nossos jogos interativos</p>
+    </header>
+
+    <main class="grid-container">
+        <a href="sliding-puzzle.html" class="card">
+            <div class="card-icon">🧩</div>
+            <h2>Sliding Puzzle</h2>
+            <p>Ordene os números arrastando as peças no menor tempo possível.</p>
+            <span class="badge">Disponível</span>
+        </a>
+
+        <div class="card locked">
+            <div class="card-icon">🔢</div>
+            <h2>Sudoku</h2>
+            <p>O clássico jogo de lógica matemática.</p>
+            <span class="badge" style="background: #475569;">Em breve</span>
+        </div>
+
+        <div class="card locked">
+            <div class="card-icon">🧪</div>
+            <h2>Memory Match</h2>
+            <p>Treine sua memória encontrando os pares.</p>
+            <span class="badge" style="background: #475569;">Em breve</span>
+        </div>
+    </main>
+
+</body>
+</html>
