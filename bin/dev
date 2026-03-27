@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if ! command -v air &> /dev/null
+then
+    echo "❌ Air not found. Installing..."
+    go install github.com/air-verse/air@latest
+fi
+
+exec air

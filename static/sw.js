@@ -5,7 +5,7 @@ const ASSETS = [
   "/sliding-puzzle.html",
   "/css/application.css",
   "/css/sliding-puzzle.css",
-  "/tetris.png"
+  "/images/tetris.png"
 ]
 
 self.addEventListener("install", (e) => {
