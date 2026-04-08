@@ -14,14 +14,47 @@
     <div id="game-container"></div>
 
     <div class="controls">
+      <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 20px;">
+        <label for="grid-size">Dificuldade</label>
+        <select id="grid-size" onchange="changeSize()">
+          <option value="3">3x3 (Fácil)</option>
+          <option value="4">4x4 (Médio)</option>
+          <option value="5">5x5 (Difícil)</option>
+        </select>
+      </div>
       <p id="status">Arraste as peças!</p>
       <button onclick="shuffleBoard()">Reiniciar Jogo</button>
     </div>
 
     <script>
     const container = document.getElementById('game-container');
-    let tiles = [1, 2, 3, 4, 5, 6, 7, 8, null];
-    const size = 3;
+    let tiles = [];
+    let size = 3;
+
+    function changeSize() {
+      const selector = document.getElementById('grid-size');
+      size = parseInt(selector.value);
+
+      // Atualiza o CSS dinamicamente para o novo tamanho
+      container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+      container.style.gridTemplateRows = `repeat(${size}, 1fr)`;
+
+      // Reinicia o status
+      document.getElementById('status').textContent = "Arraste as peças!";
+
+      resetBoard();
+    }
+
+    function resetBoard() {
+        tiles = [];
+        const totalTiles = size * size;
+        // Preenche de 1 até (total-1)
+        for (let i = 1; i < totalTiles; i++) {
+            tiles.push(i);
+        }
+        tiles.push(null); // O espaço vazio
+        shuffleBoard();
+    }
 
     function render() {
       container.innerHTML = '';
@@ -31,6 +64,7 @@
 
         if (value !== null) {
           tileDiv.textContent = value;
+          if (size > 4) tileDiv.style.fontSize = '1.2rem';
           setupDragEvents(tileDiv, index);
         } else {
           tileDiv.style.visibility = 'hidden';
@@ -97,8 +131,14 @@
     }
 
     function shuffleBoard() {
-      // Embaralha de forma válida (simulando movimentos)
-      for (let i = 0; i < 200; i++) {
+      // Inicializa o array ordenado antes de embaralhar se estiver vazio
+      if(tiles.length === 0) {
+        const total = size * size;
+        for (let i = 1; i < total; i++) tiles.push(i);
+        tiles.push(null);
+      }
+
+      for (let i = 0; i < size * size * 20; i++) { // Mais iterações para tamanhos maiores
         const emptyIdx = tiles.indexOf(null);
         const adj = [];
         if (emptyIdx % size > 0) adj.push(emptyIdx - 1);
@@ -112,12 +152,13 @@
     }
 
     function checkWin() {
-      if (tiles.slice(0, -1).every((v, i) => v === i + 1)) {
+      const isWin = tiles.slice(0, -1).every((v, i) => v === i + 1);
+      if (isWin) {
         document.getElementById('status').textContent = "🎉 Você venceu!";
       }
     }
 
-    shuffleBoard();
+    changeSize();
     </script>
   </body>
 </html>

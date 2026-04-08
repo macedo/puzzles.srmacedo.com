@@ -54,3 +54,9 @@ body {
   margin-top: 30px;
   text-align: center;
 }
+
+.setting-group label {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
