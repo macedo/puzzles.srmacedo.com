@@ -95,6 +95,16 @@ func newResponseWriter(w http.ResponseWriter) *responseWriter {
 	return &responseWriter{w, http.StatusOK}
 }
 
+// clientIP returns the visitor's IP. Behind Cloudflare Tunnel the TCP peer is
+// cloudflared, so the real address comes from CF-Connecting-IP. The container is
+// only reachable through the tunnel, which makes the header trustworthy here.
+func clientIP(r *http.Request) string {
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+	return r.RemoteAddr
+}
+
 func generateRequestID() string {
 	b := make([]byte, 4)
 	rand.Read(b)
@@ -121,7 +131,7 @@ func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 			"Started",
 			"method", r.Method,
 			"path", r.URL.Path,
-			"ip", r.RemoteAddr,
+			"ip", clientIP(r),
 			"user_agent", r.UserAgent(),
 		)
 

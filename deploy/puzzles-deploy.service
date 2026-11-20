@@ -1,0 +1,10 @@
+[Unit]
+Description=Deploy puzzles.srmacedo.com when main changes
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/puzzles-deploy
+TimeoutStartSec=15min
