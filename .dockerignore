@@ -4,3 +4,4 @@ bin
 .air.toml
 Dockerfile
 .dockerignore
+deploy

@@ -1,0 +1,21 @@
+# Installed as /etc/puzzles/compose.yaml (root-owned).
+# Published to the internet only through Cloudflare Tunnel (cloudflared on the
+# internal "publica" network); no ports are exposed on the host.
+services:
+  puzzles:
+    build: /home/macedo/code/puzzles.srmacedo.com
+    image: puzzles:local
+    container_name: puzzles
+    restart: unless-stopped
+    networks:
+      - publica
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 100
+
+networks:
+  publica:
+    external: true
