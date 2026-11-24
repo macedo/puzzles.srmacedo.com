@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6366f1">
+    <title>Memory Match · SrMacedo Puzzles</title>
+    <meta name="description" content="Jogo da memória online grátis: encontre os pares no menor número de jogadas. Cinco níveis, do 3x4 ao 6x6.">
+    <link rel="stylesheet" href="/css/application.css?v=e084eb5d">
+    <link rel="stylesheet" href="/css/game.css?v=f827bf4d">
+    <link rel="stylesheet" href="/css/memory-match.css?v=e655817c">
+    <link rel="manifest" href="/manifest.json">
+  </head>
+  <body>
+    <header class="game-header">
+      <a href="/" class="back-btn">← Menu</a>
+      <h1>Memory Match</h1>
+      <div class="streak" id="streak"></div>
+    </header>
+
+    <nav class="levels levels-5" id="levels" aria-label="Nível"></nav>
+
+    <section class="hud">
+      <div class="stat">
+        <span class="stat-label">Jogadas</span>
+        <span class="stat-value" id="moves">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Tempo</span>
+        <span class="stat-value" id="time">0:00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Recorde</span>
+        <span class="stat-value" id="best">—</span>
+      </div>
+    </section>
+
+    <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
+
+    <div class="memory-wrap">
+      <div id="board" class="memory" aria-label="Cartas"></div>
+      <div class="combo" id="combo" aria-live="polite"></div>
+    </div>
+
+    <div class="actions">
+      <button id="restart" class="btn btn-secondary">↻ Embaralhar</button>
+    </div>
+    <p class="hint">Vire duas cartas por vez e encontre os pares</p>
+
+    <div class="overlay" id="win" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="win-title">
+        <div class="trophy">🏆</div>
+        <h2 id="win-title">Resolvido!</h2>
+        <div class="stars" id="win-stars"></div>
+        <div class="record-badge" id="win-record" hidden></div>
+        <div class="win-stats three">
+          <div><span class="stat-label">Jogadas</span><strong id="win-moves"></strong></div>
+          <div><span class="stat-label">Tempo</span><strong id="win-time"></strong></div>
+          <div><span class="stat-label">Maior combo</span><strong id="win-combo"></strong></div>
+        </div>
+        <p class="win-best" id="win-best"></p>
+        <p class="win-goal" id="win-goal"></p>
+        <div class="modal-actions">
+          <button id="again" class="btn">Jogar de novo</button>
+          <button id="next" class="btn btn-accent"></button>
+          <button id="share" class="btn btn-secondary">Compartilhar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
+    <script src="/js/game.js?v=d78ba1fd"></script>
+    <script>
+    (() => {
+      const { $, fmtTime, starStr, reduceMotion } = Game;
+
+      // Um tema é uma lista de faces. Hoje são emojis; uma face também pode ser
+      // { img: '/images/temas/x.png', label: 'X' } quando houver temas com imagens.
+      const THEMES = {
+        emoji: {
+          name: 'Emojis',
+          back: '❔',
+          faces: [
+            '🐶', '🐱', '🦊', '🐼', '🐸', '🐵', '🦁', '🐯', '🐨', '🐷',
+            '🐙', '🦄', '🐢', '🦉', '🐝', '🦋', '🐳', '🦀', '🍎', '🍌',
+            '🍇', '🍓', '🍉', '🍍', '🥑', '🌽', '🍕', '🍩', '🎈', '🎸',
+            '⚽', '🚀', '🌈', '⭐', '🌵', '🍄', '🎲', '🧩', '💎', '🔥',
+          ],
+        },
+      };
+
+      const LEVELS = [
+        { id: '3x4', cols: 3, rows: 4, name: 'Fácil' },
+        { id: '4x4', cols: 4, rows: 4, name: 'Médio' },
+        { id: '4x5', cols: 4, rows: 5, name: 'Difícil' },
+        { id: '5x6', cols: 5, rows: 6, name: 'Expert' },
+        { id: '6x6', cols: 6, rows: 6, name: 'Mestre' },
+      ];
+      const pairsOf = (l) => (l.cols * l.rows) / 2;
+      // Jogadas máximas para 3 e 2 estrelas
+      const par = (l) => [Math.ceil(pairsOf(l) * 1.6), Math.ceil(pairsOf(l) * 2.4)];
+      const starsFor = (l, m) => (m <= par(l)[0] ? 3 : m <= par(l)[1] ? 2 : 1);
+
+      const store = Game.store('memory-match:v1');
+      const data = store.data;
+      const board = $('board');
+
+      let theme = THEMES[data.theme] || THEMES.emoji;
+      let level = LEVELS[0];
+      let cards = [];   // { face, el, matched }
+      let open = [];    // índices virados aguardando comparação
+      let moves = 0;
+      let found = 0;
+      let combo = 0;
+      let bestCombo = 0;
+      let elapsed = 0;
+      let startTime = 0;
+      let timerId = null;
+      let finished = false;
+      let hideTimer = null;
+
+      const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+      function renderFace(face) {
+        if (typeof face === 'string') return `<span class="emoji">${face}</span>`;
+        return `<img src="${face.img}" alt="${face.label || ''}" draggable="false">`;
+      }
+      const faceKey = (face) => (typeof face === 'string' ? face : face.img);
+      const faceLabel = (face) => (typeof face === 'string' ? face : face.label || '');
+
+      // ---------- Tempo ----------
+      function startTimer() {
+        if (timerId || finished) return;
+        startTime = performance.now() - elapsed;
+        timerId = setInterval(() => {
+          elapsed = performance.now() - startTime;
+          $('time').textContent = fmtTime(elapsed);
+        }, 250);
+      }
+      function stopTimer() {
+        if (timerId) elapsed = performance.now() - startTime;
+        clearInterval(timerId);
+        timerId = null;
+      }
+
+      // ---------- UI ----------
+      function renderLevels() {
+        $('levels').innerHTML = '';
+        LEVELS.forEach((l) => {
+          const st = store.level(l.id);
+          const btn = document.createElement('button');
+          btn.className = 'level' + (l === level ? ' active' : '');
+          btn.setAttribute('aria-pressed', l === level);
+          btn.innerHTML = `
+            <span class="level-size">${l.cols}×${l.rows}</span>
+            <span class="level-name">${l.name}</span>
+            <span class="level-stars ${st.stars ? '' : 'empty'}">${starStr(st.stars)}</span>`;
+          btn.onclick = () => l !== level && newGame(l);
+          $('levels').appendChild(btn);
+        });
+      }
+
+      function renderHud() {
+        $('moves').textContent = moves;
+        $('time').textContent = fmtTime(elapsed);
+        const st = store.level(level.id);
+        $('best').textContent = st.bestMoves != null ? `${st.bestMoves} · ${fmtTime(st.bestTime)}` : '—';
+        $('progress').style.width = `${(found / pairsOf(level)) * 100}%`;
+      }
+
+      const renderStreak = () => Game.renderStreak($('streak'), store.currentStreak());
+
+      function showCombo(n) {
+        const el = $('combo');
+        el.textContent = n >= 5 ? `🔥 Combo x${n}!` : `Combo x${n}!`;
+        el.classList.remove('show');
+        el.offsetWidth;
+        el.classList.add('show');
+      }
+
+      // ---------- Jogo ----------
+      function newGame(l = level) {
+        level = l;
+        data.lastLevel = level.id;
+        store.save();
+        stopTimer();
+        clearTimeout(hideTimer);
+        Game.stopConfetti();
+        moves = found = combo = bestCombo = 0;
+        elapsed = 0;
+        open = [];
+        finished = false;
+        $('win').hidden = true;
+
+        const faces = shuffle(theme.faces.slice()).slice(0, pairsOf(level));
+        const deck = shuffle([...faces, ...faces]);
+
+        board.innerHTML = '';
+        board.classList.remove('solved');
+        board.style.setProperty('--cols', level.cols);
+        board.style.setProperty('--rows', level.rows);
+        cards = deck.map((face, i) => {
+          const el = document.createElement('button');
+          el.className = 'mcard';
+          el.setAttribute('aria-label', 'Carta virada para baixo');
+          el.style.setProperty('--d', (Math.floor(i / level.cols) + (i % level.cols)) * 45);
+          el.innerHTML = `
+            <span class="mcard-inner">
+              <span class="mcard-back">${theme.back}</span>
+              <span class="mcard-face">${renderFace(face)}</span>
+            </span>`;
+          el.addEventListener('click', () => flip(i));
+          board.appendChild(el);
+          return { face, el, matched: false };
+        });
+
+        renderLevels();
+        renderHud();
+      }
+
+      function setFlipped(i, on) {
+        const c = cards[i];
+        c.el.classList.toggle('flipped', on);
+        c.el.setAttribute('aria-label', on || c.matched ? faceLabel(c.face) : 'Carta virada para baixo');
+      }
+
+      function hideOpen() {
+        clearTimeout(hideTimer);
+        open.forEach((i) => { setFlipped(i, false); cards[i].el.classList.remove('miss'); });
+        open = [];
+      }
+
+      function flip(i) {
+        const c = cards[i];
+        if (finished || c.matched || open.includes(i)) return;
+        // terceira carta enquanto o par errado ainda está aberto: esconde na hora
+        if (open.length === 2) hideOpen();
+
+        startTimer();
+        setFlipped(i, true);
+        open.push(i);
+        if (open.length < 2) return;
+
+        moves++;
+        const [a, b] = open;
+        if (faceKey(cards[a].face) === faceKey(cards[b].face)) {
+          cards[a].matched = cards[b].matched = true;
+          cards[a].el.classList.add('matched');
+          cards[b].el.classList.add('matched');
+          cards[a].el.disabled = cards[b].el.disabled = true;
+          open = [];
+          found++;
+          combo++;
+          bestCombo = Math.max(bestCombo, combo);
+          if (combo >= 2) showCombo(combo);
+          if (navigator.vibrate) navigator.vibrate(15);
+          renderHud();
+          if (found === pairsOf(level)) win();
+        } else {
+          combo = 0;
+          cards[a].el.classList.add('miss');
+          cards[b].el.classList.add('miss');
+          renderHud();
+          hideTimer = setTimeout(hideOpen, 900);
+        }
+      }
+
+      // ---------- Vitória ----------
+      function win() {
+        finished = true;
+        stopTimer();
+        const st = store.level(level.id);
+        const stars = starsFor(level, moves);
+        const firstWin = st.wins === 0;
+        const newMoves = st.bestMoves == null || moves < st.bestMoves;
+        const newTime = st.bestTime == null || elapsed < st.bestTime;
+        st.wins++;
+        if (newMoves) st.bestMoves = moves;
+        if (newTime) st.bestTime = elapsed;
+        st.stars = Math.max(st.stars, stars);
+        store.bumpStreak();
+        store.save();
+
+        board.classList.add('solved');
+        renderLevels();
+        renderStreak();
+        renderHud();
+
+        setTimeout(() => {
+          $('win-title').textContent = Game.pick(Game.WIN_TITLES);
+          Game.renderStars($('win-stars'), stars);
+          $('win-moves').textContent = moves;
+          $('win-time').textContent = fmtTime(elapsed);
+          $('win-combo').textContent = `x${bestCombo}`;
+
+          const isRecord = !firstWin && (newMoves || newTime);
+          $('win-record').hidden = !isRecord;
+          if (isRecord) {
+            $('win-record').textContent = newMoves && newTime ? '✨ Novo recorde de jogadas e tempo!'
+              : newMoves ? '✨ Novo recorde de jogadas!' : '✨ Novo recorde de tempo!';
+          }
+          $('win-best').textContent = firstWin
+            ? `Primeira vitória no ${level.cols}×${level.rows}! 🎉`
+            : `Seu recorde: ${st.bestMoves} jogadas · ${fmtTime(st.bestTime)}`;
+
+          if (stars < 3) {
+            $('win-goal').textContent = `🎯 Termine em até ${par(level)[stars === 1 ? 1 : 0]} jogadas para ganhar ${starStr(stars + 1)}`;
+          } else {
+            const streak = store.currentStreak();
+            $('win-goal').textContent = streak > 1
+              ? `🔥 ${streak} dias seguidos! Volte amanhã para manter a sequência.`
+              : 'Memória de elefante! 🐘 Consegue mais rápido?';
+          }
+
+          const next = LEVELS[LEVELS.indexOf(level) + 1];
+          $('next').hidden = !next;
+          if (next) {
+            $('next').textContent = `Próximo: ${next.cols}×${next.rows} →`;
+            $('next').onclick = () => newGame(next);
+          }
+          $('share').onclick = () => Game.share({
+            title: 'Memory Match',
+            path: '/memory-match',
+            text: `Encontrei todos os pares do Memory Match ${level.cols}×${level.rows} em ${moves} jogadas e ${fmtTime(elapsed)} ${starStr(stars)}. Consegue fazer melhor?`,
+          });
+          $('win').hidden = false;
+          $('again').focus();
+          Game.confetti(stars);
+        }, reduceMotion ? 0 : 900);
+      }
+
+      $('again').onclick = () => newGame();
+      $('restart').onclick = () => newGame();
+      $('win').addEventListener('click', (e) => { if (e.target.id === 'win') $('win').hidden = true; });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('win').hidden = true; });
+
+      // ---------- Início ----------
+      renderStreak();
+      newGame(LEVELS.find((l) => l.id === data.lastLevel) || LEVELS[0]);
+
+      // gancho para testes automatizados
+      window.__memory = { get cards() { return cards.map((c) => ({ key: faceKey(c.face), matched: c.matched })); }, flip };
+    })();
+    </script>
+  </body>
+</html>
