@@ -1,10 +1,14 @@
-const CACHE_NAME = "srmacedo-puzzles-v3";
+const CACHE_NAME = "srmacedo-puzzles-v4";
 const ASSETS = [
   "/",
   "/index.html",
   "/sliding-puzzle.html",
+  "/sudoku.html",
   "/css/application.css?v=e084eb5d",
-  "/css/sliding-puzzle.css?v=931c74ab",
+  "/css/game.css?v=f827bf4d",
+  "/css/sliding-puzzle.css?v=2f023e1a",
+  "/css/sudoku.css?v=5a6ef62b",
+  "/js/game.js?v=d78ba1fd",
   "/images/tetris.png"
 ]
 
