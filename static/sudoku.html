@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#6366f1">
+    <title>Sudoku · SrMacedo Puzzles</title>
+    <meta name="description" content="Sudoku online grátis com anotações, dicas e quatro níveis: fácil, médio, difícil e expert. Seu progresso fica salvo.">
+    <link rel="stylesheet" href="/css/application.css?v=e084eb5d">
+    <link rel="stylesheet" href="/css/game.css?v=f827bf4d">
+    <link rel="stylesheet" href="/css/sudoku.css?v=5a6ef62b">
+    <link rel="manifest" href="/manifest.json">
+  </head>
+  <body>
+    <header class="game-header">
+      <a href="/" class="back-btn">← Menu</a>
+      <h1>Sudoku</h1>
+      <div class="streak" id="streak"></div>
+    </header>
+
+    <nav class="levels" id="levels" aria-label="Nível"></nav>
+
+    <section class="hud">
+      <div class="stat">
+        <span class="stat-label">Erros</span>
+        <span class="stat-value" id="mistakes">0/3</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Tempo</span>
+        <span class="stat-value" id="time">0:00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Recorde</span>
+        <span class="stat-value" id="best">—</span>
+      </div>
+    </section>
+
+    <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
+
+    <div id="board" class="sudoku" role="grid" aria-label="Tabuleiro de Sudoku"></div>
+
+    <div class="tools">
+      <button class="tool" id="undo" title="Desfazer (Z)"><span class="tool-icon">↶</span>Desfazer</button>
+      <button class="tool" id="erase" title="Apagar (Backspace)"><span class="tool-icon">⌫</span>Apagar</button>
+      <button class="tool" id="notes" title="Anotações (N)" aria-pressed="false"><span class="tool-icon">✎</span>Notas<span class="tool-badge" id="notes-badge">OFF</span></button>
+      <button class="tool" id="hint" title="Dica (H)"><span class="tool-icon">💡</span>Dica<span class="tool-badge" id="hint-badge">3</span></button>
+      <button class="tool" id="new" title="Novo jogo"><span class="tool-icon">↻</span>Novo</button>
+    </div>
+
+    <div class="numpad" id="numpad"></div>
+    <p class="hint">Toque numa casa e escolha o número · teclado: 1–9, setas, N notas, Z desfazer</p>
+
+    <div class="overlay" id="win" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="win-title">
+        <div class="trophy">🏆</div>
+        <h2 id="win-title">Resolvido!</h2>
+        <div class="stars" id="win-stars"></div>
+        <div class="record-badge" id="win-record" hidden>✨ Novo recorde de tempo!</div>
+        <div class="win-stats three">
+          <div><span class="stat-label">Tempo</span><strong id="win-time"></strong></div>
+          <div><span class="stat-label">Erros</span><strong id="win-mistakes"></strong></div>
+          <div><span class="stat-label">Dicas</span><strong id="win-hints"></strong></div>
+        </div>
+        <p class="win-best" id="win-best"></p>
+        <p class="win-goal" id="win-goal"></p>
+        <div class="modal-actions">
+          <button id="again" class="btn">Jogar de novo</button>
+          <button id="next" class="btn btn-accent"></button>
+          <button id="share" class="btn btn-secondary">Compartilhar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="over" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="over-title">
+        <div class="trophy">😵</div>
+        <h2 id="over-title">Fim de jogo</h2>
+        <p>Você cometeu 3 erros. Respira e tenta de novo!</p>
+        <div class="modal-actions">
+          <button id="retry" class="btn">Recomeçar este Sudoku</button>
+          <button id="over-new" class="btn btn-secondary">Novo jogo</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
+    <script src="/js/game.js?v=d78ba1fd"></script>
+    <script>
+    (() => {
+      const { $, fmtTime, starStr, toast, reduceMotion } = Game;
+
+      const LEVELS = [
+        { id: 'facil', name: 'Fácil', givens: 40 },
+        { id: 'medio', name: 'Médio', givens: 33 },
+        { id: 'dificil', name: 'Difícil', givens: 28 },
+        { id: 'expert', name: 'Expert', givens: 24 },
+      ];
+      const MAX_MISTAKES = 3;
+      const MAX_HINTS = 3;
+
+      const store = Game.store('sudoku:v1');
+      const data = store.data;
+      data.games ||= {};
+
+      // ---------- Geometria ----------
+      const ROW = [], COL = [], BOX = [], PEERS = [];
+      for (let i = 0; i < 81; i++) {
+        ROW[i] = Math.floor(i / 9);
+        COL[i] = i % 9;
+        BOX[i] = Math.floor(ROW[i] / 3) * 3 + Math.floor(COL[i] / 3);
+      }
+      for (let i = 0; i < 81; i++) {
+        PEERS[i] = [];
+        for (let j = 0; j < 81; j++)
+          if (j !== i && (ROW[j] === ROW[i] || COL[j] === COL[i] || BOX[j] === BOX[i])) PEERS[i].push(j);
+      }
+      const UNITS = [];
+      for (let u = 0; u < 9; u++) {
+        UNITS.push([...Array(81).keys()].filter((i) => ROW[i] === u));
+        UNITS.push([...Array(81).keys()].filter((i) => COL[i] === u));
+        UNITS.push([...Array(81).keys()].filter((i) => BOX[i] === u));
+      }
+
+      // ---------- Resolvedor / gerador ----------
+      const popcount = (m) => { let n = 0; while (m) { m &= m - 1; n++; } return n; };
+      const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+      // Conta soluções (até `limit`) usando bitmasks e "casa com menos candidatos primeiro".
+      function solve(grid, { limit = 1, random = false } = {}) {
+        const g = grid.slice();
+        const rows = Array(9).fill(0), cols = Array(9).fill(0), boxes = Array(9).fill(0);
+        for (let i = 0; i < 81; i++) {
+          if (!g[i]) continue;
+          const bit = 1 << g[i];
+          if ((rows[ROW[i]] | cols[COL[i]] | boxes[BOX[i]]) & bit) return { count: 0 };
+          rows[ROW[i]] |= bit; cols[COL[i]] |= bit; boxes[BOX[i]] |= bit;
+        }
+        let count = 0, solution = null;
+        (function rec() {
+          let best = -1, bestMask = 0, bestN = 10;
+          for (let i = 0; i < 81; i++) {
+            if (g[i]) continue;
+            const mask = ~(rows[ROW[i]] | cols[COL[i]] | boxes[BOX[i]]) & 0x3fe;
+            const n = popcount(mask);
+            if (n < bestN) { best = i; bestMask = mask; bestN = n; if (n <= 1) break; }
+          }
+          if (best === -1) { count++; solution ||= g.slice(); return; }
+          if (bestN === 0) return;
+          const digits = [];
+          for (let d = 1; d <= 9; d++) if (bestMask & (1 << d)) digits.push(d);
+          if (random) shuffle(digits);
+          for (const d of digits) {
+            const bit = 1 << d;
+            g[best] = d; rows[ROW[best]] |= bit; cols[COL[best]] |= bit; boxes[BOX[best]] |= bit;
+            rec();
+            g[best] = 0; rows[ROW[best]] &= ~bit; cols[COL[best]] &= ~bit; boxes[BOX[best]] &= ~bit;
+            if (count >= limit) return;
+          }
+        })();
+        return { count, solution };
+      }
+
+      function generate(givens) {
+        const solution = solve(Array(81).fill(0), { random: true }).solution;
+        const puzzle = solution.slice();
+        let filled = 81;
+        for (const i of shuffle([...Array(81).keys()])) {
+          if (filled <= givens) break;
+          const v = puzzle[i];
+          puzzle[i] = 0;
+          if (solve(puzzle, { limit: 2 }).count !== 1) puzzle[i] = v;
+          else filled--;
+        }
+        return { puzzle, solution };
+      }
+
+      // ---------- Estado ----------
+      let level = LEVELS[0];
+      let game = null; // { puzzle, solution, values, notes, mistakes, hints, elapsed }
+      let selected = -1;
+      let notesMode = false;
+      let undoStack = [];
+      let finished = false;
+      let timerId = null;
+      let timerStart = 0;
+
+      const toStr = (a) => a.join('');
+      const fromStr = (s) => [...s].map(Number);
+
+      function saveGame() {
+        if (!game || finished) return;
+        data.games[level.id] = {
+          puzzle: toStr(game.puzzle), solution: toStr(game.solution), values: toStr(game.values),
+          notes: game.notes, mistakes: game.mistakes, hints: game.hints, hinted: game.hinted, elapsed: elapsedNow(),
+        };
+        data.lastLevel = level.id;
+        store.save();
+      }
+
+      function loadGame(saved) {
+        return {
+          puzzle: fromStr(saved.puzzle), solution: fromStr(saved.solution), values: fromStr(saved.values),
+          notes: saved.notes.slice(), mistakes: saved.mistakes, hints: saved.hints, hinted: saved.hinted || [], elapsed: saved.elapsed,
+        };
+      }
+
+      function freshGame() {
+        const { puzzle, solution } = generate(level.givens);
+        return { puzzle, solution, values: puzzle.slice(), notes: Array(81).fill(0), mistakes: 0, hints: 0, hinted: [], elapsed: 0 };
+      }
+
+      // ---------- Tempo ----------
+      const elapsedNow = () => (timerId ? performance.now() - timerStart : game ? game.elapsed : 0);
+      function startTimer() {
+        if (timerId || finished || !game) return;
+        timerStart = performance.now() - game.elapsed;
+        timerId = setInterval(() => ($('time').textContent = fmtTime(elapsedNow())), 250);
+      }
+      function stopTimer() {
+        if (timerId) game.elapsed = performance.now() - timerStart;
+        clearInterval(timerId);
+        timerId = null;
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { stopTimer(); saveGame(); } else startTimer();
+      });
+      window.addEventListener('pagehide', saveGame);
+      setInterval(saveGame, 10000);
+
+      // ---------- Tabuleiro ----------
+      const board = $('board');
+      const cellEls = [];
+      for (let b = 0; b < 9; b++) {
+        const box = document.createElement('div');
+        box.className = 'box';
+        for (let k = 0; k < 9; k++) {
+          const r = Math.floor(b / 3) * 3 + Math.floor(k / 3);
+          const c = (b % 3) * 3 + (k % 3);
+          const idx = r * 9 + c;
+          const el = document.createElement('div');
+          el.className = 'cell';
+          el.setAttribute('role', 'gridcell');
+          el.style.setProperty('--d', (r + c) * 35);
+          el.addEventListener('pointerdown', (e) => { e.preventDefault(); select(idx); });
+          cellEls[idx] = el;
+          box.appendChild(el);
+        }
+        board.appendChild(box);
+      }
+
+      const numpad = $('numpad');
+      const numEls = [];
+      for (let d = 1; d <= 9; d++) {
+        const btn = document.createElement('button');
+        btn.className = 'num';
+        btn.innerHTML = `<span>${d}</span><small></small>`;
+        btn.addEventListener('click', () => input(d));
+        numEls[d] = btn;
+        numpad.appendChild(btn);
+      }
+
+      const isWrong = (i) => game.values[i] && game.values[i] !== game.solution[i];
+
+      function render() {
+        const sv = selected >= 0 ? game.values[selected] : 0;
+        const counts = Array(10).fill(0);
+        let correct = 0, empties = 0;
+        for (let i = 0; i < 81; i++) {
+          const v = game.values[i];
+          const el = cellEls[i];
+          if (v && !isWrong(i)) { counts[v]++; correct++; }
+          if (!game.puzzle[i]) empties++;
+          const peer = selected >= 0 && i !== selected &&
+            (ROW[i] === ROW[selected] || COL[i] === COL[selected] || BOX[i] === BOX[selected]);
+          el.className = 'cell' +
+            (game.puzzle[i] ? ' given' : v ? ' user' : '') +
+            (isWrong(i) ? ' wrong' : '') +
+            (i === selected ? ' selected' : '') +
+            (peer ? ' peer' : '') +
+            (sv && v === sv && i !== selected ? ' same' : '') +
+            (!v && sv && game.notes[i] & (1 << sv) ? ' note-match' : '') +
+            (game.hinted.includes(i) ? ' hinted' : '') +
+            (el.classList.contains('flash') ? ' flash' : '') +
+            (el.classList.contains('shake') ? ' shake' : '');
+          if (v) el.textContent = v;
+          else if (game.notes[i]) {
+            let html = '<div class="notes">';
+            for (let d = 1; d <= 9; d++)
+              html += `<span class="${sv === d ? 'hl' : ''}">${game.notes[i] & (1 << d) ? d : ''}</span>`;
+            el.innerHTML = html + '</div>';
+          } else el.textContent = '';
+        }
+        for (let d = 1; d <= 9; d++) {
+          const left = 9 - counts[d];
+          numEls[d].querySelector('small').textContent = left || '';
+          numEls[d].classList.toggle('done', left === 0);
+          numEls[d].classList.toggle('active', sv === d);
+        }
+        $('mistakes').textContent = `${game.mistakes}/${MAX_MISTAKES}`;
+        $('mistakes').classList.toggle('danger', game.mistakes === MAX_MISTAKES - 1);
+        $('time').textContent = fmtTime(elapsedNow());
+        const st = store.level(level.id);
+        $('best').textContent = st.bestTime != null ? fmtTime(st.bestTime) : '—';
+        const userCorrect = correct - (81 - empties);
+        $('progress').style.width = `${(userCorrect / empties) * 100}%`;
+        $('notes').classList.toggle('on', notesMode);
+        $('notes').setAttribute('aria-pressed', notesMode);
+        $('notes-badge').textContent = notesMode ? 'ON' : 'OFF';
+        $('hint-badge').textContent = MAX_HINTS - game.hints;
+        $('hint').classList.toggle('empty', game.hints >= MAX_HINTS);
+      }
+
+      const started = (l) => { const g = data.games[l.id]; return g && g.values !== g.puzzle; };
+
+      function renderLevels() {
+        $('levels').innerHTML = '';
+        LEVELS.forEach((l) => {
+          const st = store.level(l.id);
+          const btn = document.createElement('button');
+          btn.className = 'level' + (l === level ? ' active' : '');
+          btn.setAttribute('aria-pressed', l === level);
+          btn.innerHTML = `
+            <span class="level-size">${l.name}</span>
+            <span class="level-name">${started(l) ? '▶ em jogo' : `${l.givens} pistas`}</span>
+            <span class="level-stars ${st.stars ? '' : 'empty'}">${starStr(st.stars)}</span>`;
+          btn.onclick = () => l !== level && openLevel(l);
+          $('levels').appendChild(btn);
+        });
+      }
+
+      const renderStreak = () => Game.renderStreak($('streak'), store.currentStreak());
+
+      function flash(cells) {
+        cells.forEach((i) => {
+          const el = cellEls[i];
+          el.classList.remove('flash');
+          el.offsetWidth;
+          el.classList.add('flash');
+        });
+      }
+
+      function shake(i) {
+        const el = cellEls[i];
+        el.classList.remove('shake');
+        el.offsetWidth;
+        el.classList.add('shake');
+      }
+
+      // ---------- Ações ----------
+      function select(i) {
+        if (finished) return;
+        selected = i;
+        render();
+      }
+
+      const snapshot = () => ({ values: game.values.slice(), notes: game.notes.slice() });
+      const pushUndo = () => { undoStack.push(snapshot()); if (undoStack.length > 200) undoStack.shift(); };
+
+      function clearPeerNotes(i, d) {
+        for (const j of PEERS[i]) game.notes[j] &= ~(1 << d);
+      }
+
+      function place(i, d) {
+        game.values[i] = d;
+        game.notes[i] = 0;
+        if (d !== game.solution[i]) {
+          game.mistakes++;
+          shake(i);
+          if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+          return false;
+        }
+        clearPeerNotes(i, d);
+        const done = UNITS.filter((u) => u.includes(i) && u.every((j) => game.values[j] === game.solution[j]));
+        if (done.length) flash([...new Set(done.flat())]);
+        if (navigator.vibrate) navigator.vibrate(8);
+        return true;
+      }
+
+      function input(d) {
+        if (finished || selected < 0 || game.puzzle[selected]) return;
+        const i = selected;
+        if (notesMode) {
+          if (game.values[i] && !isWrong(i)) return;
+          pushUndo();
+          if (game.values[i]) game.values[i] = 0;
+          game.notes[i] ^= 1 << d;
+        } else {
+          if (game.values[i] === d) return;
+          if (game.values[i] && !isWrong(i)) return; // casa já resolvida
+          pushUndo();
+          place(i, d);
+        }
+        afterChange();
+      }
+
+      function erase() {
+        if (finished || selected < 0 || game.puzzle[selected]) return;
+        const i = selected;
+        if (game.values[i] && !isWrong(i)) return;
+        if (!game.values[i] && !game.notes[i]) return;
+        pushUndo();
+        game.values[i] = 0;
+        game.notes[i] = 0;
+        afterChange();
+      }
+
+      function undo() {
+        if (finished || !undoStack.length) return;
+        const s = undoStack.pop();
+        game.values = s.values;
+        game.notes = s.notes;
+        afterChange();
+      }
+
+      function hint() {
+        if (finished) return;
+        if (game.hints >= MAX_HINTS) { toast('Você já usou todas as dicas deste jogo'); return; }
+        let i = selected;
+        if (i < 0 || game.puzzle[i] || (game.values[i] && !isWrong(i))) {
+          const open = [...Array(81).keys()].filter((j) => !game.values[j] || isWrong(j));
+          if (!open.length) return;
+          i = Game.pick(open);
+        }
+        pushUndo();
+        game.hints++;
+        selected = i;
+        game.hinted.push(i);
+        place(i, game.solution[i]);
+        afterChange();
+      }
+
+      function afterChange() {
+        startTimer();
+        render();
+        if (game.mistakes >= MAX_MISTAKES) return gameOver();
+        if (game.values.every((v, i) => v === game.solution[i])) return win();
+        saveGame();
+      }
+
+      // ---------- Fim de jogo ----------
+      const starsFor = (g) => { const p = g.mistakes + g.hints; return p === 0 ? 3 : p <= 2 ? 2 : 1; };
+
+      function win() {
+        finished = true;
+        stopTimer();
+        const elapsed = game.elapsed;
+        const st = store.level(level.id);
+        const stars = starsFor(game);
+        const firstWin = st.wins === 0;
+        const newTime = st.bestTime == null || elapsed < st.bestTime;
+        st.wins++;
+        if (newTime) st.bestTime = elapsed;
+        st.stars = Math.max(st.stars, stars);
+        store.bumpStreak();
+        delete data.games[level.id];
+        store.save();
+
+        selected = -1;
+        render();
+        board.classList.add('solved');
+        renderLevels();
+        renderStreak();
+
+        setTimeout(() => {
+          $('win-title').textContent = Game.pick(Game.WIN_TITLES);
+          Game.renderStars($('win-stars'), stars);
+          $('win-time').textContent = fmtTime(elapsed);
+          $('win-mistakes').textContent = game.mistakes;
+          $('win-hints').textContent = game.hints;
+          $('win-record').hidden = firstWin || !newTime;
+          $('win-best').textContent = firstWin
+            ? `Primeiro Sudoku ${level.name.toLowerCase()} resolvido! 🎉`
+            : `Seu recorde no ${level.name}: ${fmtTime(st.bestTime)}`;
+          const streak = store.currentStreak();
+          $('win-goal').textContent = stars < 3
+            ? `🎯 Termine sem erros e sem dicas para ganhar ${starStr(3)}`
+            : streak > 1
+              ? `🔥 ${streak} dias seguidos! Volte amanhã para manter a sequência.`
+              : 'Perfeito! Será que consegue um tempo ainda melhor?';
+          const next = LEVELS[LEVELS.indexOf(level) + 1];
+          $('next').hidden = !next;
+          if (next) {
+            $('next').textContent = `Próximo: ${next.name} →`;
+            $('next').onclick = () => openLevel(next);
+          }
+          $('share').onclick = () => Game.share({
+            title: 'Sudoku',
+            path: '/sudoku',
+            text: `Resolvi um Sudoku ${level.name} em ${fmtTime(elapsed)} ${starStr(stars)}. Consegue fazer melhor?`,
+          });
+          $('win').hidden = false;
+          $('again').focus();
+          Game.confetti(stars);
+        }, reduceMotion ? 0 : 1000);
+      }
+
+      function gameOver() {
+        finished = true;
+        stopTimer();
+        selected = -1;
+        render();
+        delete data.games[level.id];
+        store.save();
+        renderLevels();
+        $('over').hidden = false;
+        $('retry').focus();
+      }
+
+      // ---------- Ciclo de jogo ----------
+      function begin(g) {
+        stopTimer();
+        Game.stopConfetti();
+        game = g;
+        finished = false;
+        selected = -1;
+        undoStack = [];
+        notesMode = false;
+        board.classList.remove('solved');
+        cellEls.forEach((el) => el.classList.remove('flash', 'shake'));
+        $('win').hidden = true;
+        $('over').hidden = true;
+        render();
+        renderLevels();
+        startTimer();
+        saveGame();
+      }
+
+      function openLevel(l) {
+        if (game && !finished) { stopTimer(); saveGame(); }
+        level = l;
+        const saved = data.games[l.id];
+        begin(saved ? loadGame(saved) : freshGame());
+      }
+
+      function newGame() {
+        const inProgress = !finished && game.values.some((v, i) => v && !game.puzzle[i]);
+        if (inProgress && !confirm('Começar um novo Sudoku? O progresso deste será perdido.')) return;
+        delete data.games[level.id];
+        begin(freshGame());
+      }
+
+      function retry() {
+        begin({ ...game, values: game.puzzle.slice(), notes: Array(81).fill(0), mistakes: 0, hints: 0, hinted: [], elapsed: 0 });
+      }
+
+      // ---------- Eventos ----------
+      $('undo').onclick = undo;
+      $('erase').onclick = erase;
+      $('notes').onclick = () => { notesMode = !notesMode; render(); };
+      $('hint').onclick = hint;
+      $('new').onclick = newGame;
+      $('again').onclick = () => { delete data.games[level.id]; begin(freshGame()); };
+      $('retry').onclick = retry;
+      $('over-new').onclick = () => begin(freshGame());
+      $('win').addEventListener('click', (e) => { if (e.target.id === 'win') $('win').hidden = true; });
+
+      document.addEventListener('keydown', (e) => {
+        if (!$('win').hidden || !$('over').hidden) {
+          if (e.key === 'Escape') { $('win').hidden = true; }
+          return;
+        }
+        if (e.ctrlKey || e.metaKey) {
+          if (e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+          return;
+        }
+        const k = e.key;
+        if (/^[1-9]$/.test(k)) { input(Number(k)); return; }
+        if (k === 'Backspace' || k === 'Delete' || k === '0') { e.preventDefault(); erase(); return; }
+        if (k === 'n' || k === 'N') { notesMode = !notesMode; render(); return; }
+        if (k === 'z' || k === 'Z') { undo(); return; }
+        if (k === 'h' || k === 'H') { hint(); return; }
+        const moves = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 };
+        if (k in moves) {
+          e.preventDefault();
+          if (selected < 0) { select(40); return; }
+          const r = ROW[selected], c = COL[selected];
+          const nr = (r + (k === 'ArrowUp' ? -1 : k === 'ArrowDown' ? 1 : 0) + 9) % 9;
+          const nc = (c + (k === 'ArrowLeft' ? -1 : k === 'ArrowRight' ? 1 : 0) + 9) % 9;
+          select(nr * 9 + nc);
+        }
+      });
+
+      // ---------- Início ----------
+      renderStreak();
+      openLevel(LEVELS.find((l) => l.id === data.lastLevel) || LEVELS[0]);
+
+      // ganchos para testes automatizados
+      window.__sudoku = { get game() { return game; }, select, input, solve };
+    })();
+    </script>
+  </body>
+</html>

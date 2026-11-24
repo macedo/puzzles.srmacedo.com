@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Atualiza o ?v=<hash> de cada CSS/JS referenciado nos HTML e no service worker.
+# Rode depois de alterar qualquer arquivo em static/css ou static/js.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+for f in static/css/*.css static/js/*.js; do
+  url="/${f#static/}"
+  hash=$(md5sum "$f" | cut -c1-8)
+  sed -i -E "s#${url}(\?v=[A-Za-z0-9]*)?\"#${url}?v=${hash}\"#g" static/*.html static/sw.js
+done
+
+grep -ohE '/(css|js)/[^"]+\?v=[A-Za-z0-9]+' static/*.html static/sw.js | sort -u
