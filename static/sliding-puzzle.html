@@ -3,162 +3,519 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Sliding Puzzle Touch & Drag</title>
+    <meta name="theme-color" content="#6366f1">
+    <title>Sliding Puzzle · SrMacedo Puzzles</title>
+    <meta name="description" content="Sliding Puzzle online grátis: ordene as peças no menor número de movimentos. Níveis do 3x3 ao 10x10.">
     <link rel="stylesheet" href="/css/application.css">
     <link rel="stylesheet" href="/css/sliding-puzzle.css">
-
+    <link rel="manifest" href="/manifest.json">
   </head>
   <body>
-    <a href="/" class="back-btn">← Voltar ao Menu</a>
-    <h2>Sliding Puzzle</h2>
-    <div id="game-container"></div>
+    <header class="game-header">
+      <a href="/" class="back-btn">← Menu</a>
+      <h1>Sliding Puzzle</h1>
+      <div class="streak" id="streak" title="Dias seguidos com vitória"></div>
+    </header>
 
-    <div class="controls">
-      <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 20px;">
-        <label for="grid-size">Dificuldade</label>
-        <select id="grid-size" onchange="changeSize()">
-          <option value="3">3x3 (Fácil)</option>
-          <option value="4">4x4 (Médio)</option>
-          <option value="5">5x5 (Difícil)</option>
-        </select>
+    <nav class="levels" id="levels" aria-label="Nível"></nav>
+
+    <section class="hud">
+      <div class="stat">
+        <span class="stat-label">Movimentos</span>
+        <span class="stat-value" id="moves">0</span>
       </div>
-      <p id="status">Arraste as peças!</p>
-      <button onclick="shuffleBoard()">Reiniciar Jogo</button>
+      <div class="stat">
+        <span class="stat-label">Tempo</span>
+        <span class="stat-value" id="time">0:00</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Recorde</span>
+        <span class="stat-value" id="best">—</span>
+      </div>
+    </section>
+
+    <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress"></div></div>
+
+    <div id="board" class="board" role="grid" aria-label="Tabuleiro"></div>
+
+    <div class="actions">
+      <button id="shuffle" class="btn btn-secondary">↻ Embaralhar</button>
+    </div>
+    <p class="hint">Toque ou arraste as peças · setas do teclado também funcionam</p>
+
+    <div class="overlay" id="win" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="win-title">
+        <div class="trophy">🏆</div>
+        <h2 id="win-title">Resolvido!</h2>
+        <div class="stars" id="win-stars"></div>
+        <div class="record-badge" id="win-record" hidden>✨ Novo recorde!</div>
+        <div class="win-stats">
+          <div><span class="stat-label">Movimentos</span><strong id="win-moves"></strong></div>
+          <div><span class="stat-label">Tempo</span><strong id="win-time"></strong></div>
+        </div>
+        <p class="win-best" id="win-best"></p>
+        <p class="win-goal" id="win-goal"></p>
+        <div class="modal-actions">
+          <button id="again" class="btn">Jogar de novo</button>
+          <button id="next" class="btn btn-accent"></button>
+          <button id="share" class="btn btn-secondary">Compartilhar</button>
+        </div>
+      </div>
     </div>
 
+    <div class="toast" id="toast" hidden></div>
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
     <script>
-    const container = document.getElementById('game-container');
-    let tiles = [];
-    let size = 3;
-
-    function changeSize() {
-      const selector = document.getElementById('grid-size');
-      size = parseInt(selector.value);
-
-      // Atualiza o CSS dinamicamente para o novo tamanho
-      container.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
-      container.style.gridTemplateRows = `repeat(${size}, 1fr)`;
-
-      // Reinicia o status
-      document.getElementById('status').textContent = "Arraste as peças!";
-
-      resetBoard();
-    }
-
-    function resetBoard() {
-        tiles = [];
-        const totalTiles = size * size;
-        // Preenche de 1 até (total-1)
-        for (let i = 1; i < totalTiles; i++) {
-            tiles.push(i);
-        }
-        tiles.push(null); // O espaço vazio
-        shuffleBoard();
-    }
-
-    function render() {
-      container.innerHTML = '';
-      tiles.forEach((value, index) => {
-        const tileDiv = document.createElement('div');
-        tileDiv.className = 'tile' + (value === null ? ' empty' : '');
-
-        if (value !== null) {
-          tileDiv.textContent = value;
-          if (size > 4) tileDiv.style.fontSize = '1.2rem';
-          setupDragEvents(tileDiv, index);
-        } else {
-          tileDiv.style.visibility = 'hidden';
-        }
-        container.appendChild(tileDiv);
-      });
-    }
-
-    function setupDragEvents(el, index) {
-      let startX, startY;
-
-      el.onpointerdown = (e) => {
-        const emptyIndex = tiles.indexOf(null);
-        if (!isAdjacent(index, emptyIndex)) return;
-
-        el.setPointerCapture(e.pointerId);
-        el.classList.add('dragging');
-        startX = e.clientX;
-        startY = e.clientY;
-
-        el.onpointermove = (moveEvent) => {
-          const dx = moveEvent.clientX - startX;
-          const dy = moveEvent.clientY - startY;
-
-          // Limita o movimento visual ao eixo permitido
-          const moveDir = getDirection(index, emptyIndex);
-          if (moveDir === 'h') el.style.transform = `translateX(${dx}px)`;
-          if (moveDir === 'v') el.style.transform = `translateY(${dy}px)`;
-        };
-
-        el.onpointerup = (upEvent) => {
-          el.onpointermove = null;
-          el.onpointerup = null;
-          el.classList.remove('dragging');
-          el.style.transform = '';
-
-          const dist = Math.sqrt(Math.pow(upEvent.clientX - startX, 2) + Math.pow(upEvent.clientY - startY, 2));
-
-          // Se arrastou mais de 30px ou apenas clicou, move a peça
-          if (dist > 30 || dist < 5) {
-            moveTile(index);
-          }
-        };
+    (() => {
+      const LEVELS = [
+        { size: 3, name: 'Fácil' },
+        { size: 4, name: 'Médio' },
+        { size: 5, name: 'Difícil' },
+        { size: 6, name: 'Expert' },
+        { size: 7, name: 'Mestre' },
+        { size: 8, name: 'Insano' },
+        { size: 9, name: 'Lenda' },
+        { size: 10, name: 'Impossível' },
+      ];
+      // Movimentos máximos para 3 e 2 estrelas
+      const PAR = {
+        3: [50, 100], 4: [180, 360], 5: [400, 800], 6: [750, 1500],
+        7: [1200, 2400], 8: [1800, 3600], 9: [2600, 5200], 10: [3600, 7200],
       };
-    }
+      const STORAGE_KEY = 'sliding-puzzle:v1';
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    function isAdjacent(idx1, idx2) {
-      const r1 = Math.floor(idx1 / size), c1 = idx1 % size;
-      const r2 = Math.floor(idx2 / size), c2 = idx2 % size;
-      return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
-    }
+      const $ = (id) => document.getElementById(id);
+      const board = $('board');
 
-    function getDirection(idx1, idx2) {
-      return Math.floor(idx1 / size) === Math.floor(idx2 / size) ? 'h' : 'v';
-    }
+      let size = 3;
+      let tiles = [];
+      let tileEls = new Map();
+      let moves = 0;
+      let startTime = 0;
+      let elapsed = 0;
+      let timerId = null;
+      let solved = false;
+      let geom = { cell: 0, gap: 0, pad: 0 };
+      let confettiRaf = null;
 
-    function moveTile(index) {
-      const emptyIndex = tiles.indexOf(null);
-      if (isAdjacent(index, emptyIndex)) {
-        [tiles[index], tiles[emptyIndex]] = [tiles[emptyIndex], tiles[index]];
-        render();
-        checkWin();
+      // ---------- Persistência ----------
+      function loadData() {
+        try {
+          return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        } catch {
+          return {};
+        }
       }
-    }
+      let data = loadData();
+      data.levels ||= {};
+      data.streak ||= { count: 0, lastDay: null };
+      const saveData = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const levelStats = (s) => (data.levels[s] ||= { bestMoves: null, bestTime: null, stars: 0, wins: 0 });
 
-    function shuffleBoard() {
-      // Inicializa o array ordenado antes de embaralhar se estiver vazio
-      if(tiles.length === 0) {
+      const dayKey = (d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+      function currentStreak() {
+        const { count, lastDay } = data.streak;
+        const today = dayKey(new Date());
+        const y = new Date(); y.setDate(y.getDate() - 1);
+        return (lastDay === today || lastDay === dayKey(y)) ? count : 0;
+      }
+      function bumpStreak() {
+        const today = dayKey(new Date());
+        if (data.streak.lastDay === today) return;
+        data.streak.count = currentStreak() + 1;
+        data.streak.lastDay = today;
+      }
+
+      // ---------- Utilidades ----------
+      const fmtTime = (ms) => {
+        const s = Math.floor(ms / 1000);
+        return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+      };
+      const starsFor = (s, m) => m <= PAR[s][0] ? 3 : m <= PAR[s][1] ? 2 : 1;
+      const starStr = (n, total = 3) => '★'.repeat(n) + '☆'.repeat(total - n);
+
+      function toast(msg) {
+        const t = $('toast');
+        t.textContent = msg;
+        t.hidden = false;
+        clearTimeout(toast.id);
+        toast.id = setTimeout(() => (t.hidden = true), 2000);
+      }
+
+      // ---------- UI de níveis / HUD ----------
+      function renderLevels() {
+        $('levels').innerHTML = '';
+        LEVELS.forEach(({ size: s, name }) => {
+          const st = levelStats(s);
+          const btn = document.createElement('button');
+          btn.className = 'level' + (s === size ? ' active' : '');
+          btn.setAttribute('aria-pressed', s === size);
+          btn.innerHTML = `
+            <span class="level-size">${s}×${s}</span>
+            <span class="level-name">${name}</span>
+            <span class="level-stars ${st.stars ? '' : 'empty'}">${starStr(st.stars)}</span>`;
+          btn.onclick = () => s !== size && newGame(s);
+          $('levels').appendChild(btn);
+        });
+      }
+
+      function renderStreak() {
+        const n = currentStreak();
+        $('streak').textContent = n > 0 ? `🔥 ${n}` : '';
+        $('streak').title = n > 0 ? `${n} dia(s) seguido(s) com vitória` : '';
+      }
+
+      function renderHud() {
+        $('moves').textContent = moves;
+        $('time').textContent = fmtTime(elapsed);
+        const st = levelStats(size);
+        $('best').textContent = st.bestMoves != null ? `${st.bestMoves} · ${fmtTime(st.bestTime)}` : '—';
+        const correct = tiles.filter((v, i) => v === i + 1).length;
+        $('progress').style.width = `${(correct / (size * size - 1)) * 100}%`;
+      }
+
+      function startTimer() {
+        if (timerId) return;
+        startTime = performance.now() - elapsed;
+        timerId = setInterval(() => {
+          elapsed = performance.now() - startTime;
+          $('time').textContent = fmtTime(elapsed);
+        }, 250);
+      }
+      function stopTimer() {
+        if (timerId) elapsed = performance.now() - startTime;
+        clearInterval(timerId);
+        timerId = null;
+      }
+
+      // ---------- Tabuleiro ----------
+      function isSolvable(arr) {
+        const nums = arr.filter((v) => v !== null);
+        let inv = 0;
+        for (let i = 0; i < nums.length; i++)
+          for (let j = i + 1; j < nums.length; j++)
+            if (nums[i] > nums[j]) inv++;
+        if (size % 2 === 1) return inv % 2 === 0;
+        const blankRowFromBottom = size - Math.floor(arr.indexOf(null) / size);
+        return (inv + blankRowFromBottom) % 2 === 1;
+      }
+
+      function shuffled() {
         const total = size * size;
-        for (let i = 1; i < total; i++) tiles.push(i);
-        tiles.push(null);
+        let arr;
+        do {
+          arr = Array.from({ length: total - 1 }, (_, i) => i + 1).concat(null);
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          if (!isSolvable(arr)) {
+            // trocar duas peças (não vazias) inverte a paridade
+            const a = arr[0] !== null && arr[1] !== null ? 0 : arr.length - 2;
+            const b = a + 1;
+            [arr[a], arr[b]] = [arr[b], arr[a]];
+          }
+          // evita tabuleiros quase resolvidos
+        } while (arr.filter((v, i) => v === i + 1).length > Math.floor(total / 4));
+        return arr;
       }
 
-      for (let i = 0; i < size * size * 20; i++) { // Mais iterações para tamanhos maiores
-        const emptyIdx = tiles.indexOf(null);
-        const adj = [];
-        if (emptyIdx % size > 0) adj.push(emptyIdx - 1);
-        if (emptyIdx % size < size - 1) adj.push(emptyIdx + 1);
-        if (emptyIdx >= size) adj.push(emptyIdx - size);
-        if (emptyIdx < size * (size - 1)) adj.push(emptyIdx + size);
-        const randomAdj = adj[Math.floor(Math.random() * adj.length)];
-        [tiles[emptyIdx], tiles[randomAdj]] = [tiles[randomAdj], tiles[emptyIdx]];
+      function newGame(s = size) {
+        size = s;
+        data.lastSize = size;
+        saveData();
+        stopTimer();
+        moves = 0;
+        elapsed = 0;
+        solved = false;
+        tiles = shuffled();
+        board.classList.remove('solved');
+        $('win').hidden = true;
+        stopConfetti();
+        buildBoard();
+        renderLevels();
+        renderHud();
       }
-      render();
-    }
 
-    function checkWin() {
-      const isWin = tiles.slice(0, -1).every((v, i) => v === i + 1);
-      if (isWin) {
-        document.getElementById('status').textContent = "🎉 Você venceu!";
+      function buildBoard() {
+        board.innerHTML = '';
+        tileEls = new Map();
+        board.style.setProperty('--size', size);
+        tiles.forEach((v) => {
+          if (v === null) return;
+          const el = document.createElement('div');
+          el.className = 'tile';
+          el.textContent = v;
+          el.dataset.value = v;
+          el.addEventListener('pointerdown', onPointerDown);
+          tileEls.set(v, el);
+          board.appendChild(el);
+        });
+        board.classList.add('no-anim');
+        layout();
+        board.offsetWidth; // força reflow para não animar a montagem
+        board.classList.remove('no-anim');
       }
-    }
 
-    changeSize();
+      function measure() {
+        const w = board.clientWidth;
+        const pad = Math.round(w * 0.025);
+        const gap = Math.max(3, Math.round(w * 0.02 * (4 / size)));
+        const cell = (w - pad * 2 - gap * (size - 1)) / size;
+        geom = { cell, gap, pad };
+        board.style.setProperty('--cell', `${cell}px`);
+      }
+
+      const posOf = (idx) => ({
+        x: geom.pad + (idx % size) * (geom.cell + geom.gap),
+        y: geom.pad + Math.floor(idx / size) * (geom.cell + geom.gap),
+      });
+
+      function placeTile(el, idx, ox = 0, oy = 0) {
+        const { x, y } = posOf(idx);
+        el.style.transform = `translate(${x + ox}px, ${y + oy}px)`;
+      }
+
+      function layout() {
+        measure();
+        tiles.forEach((v, idx) => {
+          if (v === null) return;
+          const el = tileEls.get(v);
+          placeTile(el, idx);
+          el.classList.toggle('correct', v === idx + 1);
+        });
+      }
+
+      // Índices das peças entre `idx` e o espaço vazio (mesma linha/coluna), ou null
+      function lineToEmpty(idx) {
+        const empty = tiles.indexOf(null);
+        const sameRow = Math.floor(idx / size) === Math.floor(empty / size);
+        const sameCol = idx % size === empty % size;
+        if (idx === empty || (!sameRow && !sameCol)) return null;
+        const step = sameRow ? Math.sign(empty - idx) : Math.sign(empty - idx) * size;
+        const group = [];
+        for (let i = idx; i !== empty; i += step) group.push(i);
+        return { group, step, axis: sameRow ? 'x' : 'y', dir: Math.sign(empty - idx) };
+      }
+
+      function slide(idx) {
+        const line = lineToEmpty(idx);
+        if (!line || solved) return false;
+        const empty = tiles.indexOf(null);
+        for (let i = empty; i !== idx; i -= line.step) tiles[i] = tiles[i - line.step];
+        tiles[idx] = null;
+        moves += line.group.length;
+        startTimer();
+        layout();
+        renderHud();
+        if (navigator.vibrate) navigator.vibrate(8);
+        checkWin();
+        return true;
+      }
+
+      function shake(el) {
+        el.classList.remove('shake');
+        el.offsetWidth;
+        el.classList.add('shake');
+      }
+
+      // ---------- Arrastar / tocar ----------
+      function onPointerDown(e) {
+        if (solved) return;
+        const el = e.currentTarget;
+        const idx = tiles.indexOf(Number(el.dataset.value));
+        const line = lineToEmpty(idx);
+        if (!line) { shake(el); return; }
+
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        const els = line.group.map((i) => tileEls.get(tiles[i]));
+        const max = geom.cell + geom.gap;
+        const sx = e.clientX, sy = e.clientY;
+        let offset = 0, dist = 0;
+        board.classList.add('dragging');
+
+        const onMove = (ev) => {
+          const dx = ev.clientX - sx, dy = ev.clientY - sy;
+          dist = Math.max(dist, Math.hypot(dx, dy));
+          const d = line.axis === 'x' ? dx : dy;
+          offset = Math.min(max, Math.max(0, d * line.dir));
+          line.group.forEach((i, k) => {
+            const o = offset * line.dir;
+            placeTile(els[k], i, line.axis === 'x' ? o : 0, line.axis === 'y' ? o : 0);
+          });
+        };
+        const onUp = () => {
+          el.removeEventListener('pointermove', onMove);
+          el.removeEventListener('pointerup', onUp);
+          el.removeEventListener('pointercancel', onUp);
+          board.classList.remove('dragging');
+          if (dist < 6 || offset > max * 0.35) slide(idx);
+          else layout();
+        };
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerup', onUp);
+        el.addEventListener('pointercancel', onUp);
+      }
+
+      document.addEventListener('keydown', (e) => {
+        if (!$('win').hidden) {
+          if (e.key === 'Escape') $('win').hidden = true;
+          return;
+        }
+        const empty = tiles.indexOf(null);
+        const r = Math.floor(empty / size), c = empty % size;
+        // a seta indica a direção em que a peça se move até o espaço vazio
+        const map = {
+          ArrowUp: r < size - 1 ? empty + size : -1,
+          ArrowDown: r > 0 ? empty - size : -1,
+          ArrowLeft: c < size - 1 ? empty + 1 : -1,
+          ArrowRight: c > 0 ? empty - 1 : -1,
+        };
+        if (e.key in map) {
+          e.preventDefault();
+          if (map[e.key] >= 0) slide(map[e.key]);
+        }
+      });
+
+      // ---------- Vitória ----------
+      function checkWin() {
+        if (!tiles.every((v, i) => (i === tiles.length - 1 ? v === null : v === i + 1))) return;
+        solved = true;
+        stopTimer();
+
+        const st = levelStats(size);
+        const stars = starsFor(size, moves);
+        const newMoves = st.bestMoves == null || moves < st.bestMoves;
+        const newTime = st.bestTime == null || elapsed < st.bestTime;
+        const firstWin = st.wins === 0;
+        st.wins++;
+        if (newMoves) st.bestMoves = moves;
+        if (newTime) st.bestTime = elapsed;
+        st.stars = Math.max(st.stars, stars);
+        bumpStreak();
+        saveData();
+
+        tiles.forEach((v, i) => v !== null && tileEls.get(v).style.setProperty('--d', i * (500 / tiles.length)));
+        board.classList.add('solved');
+        renderLevels();
+        renderStreak();
+        renderHud();
+        setTimeout(() => showWin({ stars, newMoves, newTime, firstWin }), reduceMotion ? 0 : 900);
+      }
+
+      const WIN_TITLES = ['Resolvido!', 'Mandou bem!', 'Incrível!', 'Mestre do puzzle!', 'Show!'];
+
+      function showWin({ stars, newMoves, newTime, firstWin }) {
+        const st = levelStats(size);
+        $('win-title').textContent = WIN_TITLES[Math.floor(Math.random() * WIN_TITLES.length)];
+        $('win-moves').textContent = moves;
+        $('win-time').textContent = fmtTime(elapsed);
+
+        $('win-stars').innerHTML = [0, 1, 2]
+          .map((i) => `<span class="star ${i < stars ? 'on' : ''}" style="--i:${i}">★</span>`)
+          .join('');
+
+        const isRecord = !firstWin && (newMoves || newTime);
+        $('win-record').hidden = !isRecord;
+        if (isRecord) {
+          $('win-record').textContent =
+            newMoves && newTime ? '✨ Novo recorde de movimentos e tempo!'
+            : newMoves ? '✨ Novo recorde de movimentos!' : '✨ Novo recorde de tempo!';
+        }
+
+        $('win-best').textContent = firstWin
+          ? `Primeira vitória no ${size}×${size}! 🎉`
+          : `Seu recorde: ${st.bestMoves} movimentos · ${fmtTime(st.bestTime)}`;
+
+        if (stars < 3) {
+          const target = PAR[size][stars === 1 ? 1 : 0];
+          $('win-goal').textContent = `🎯 Termine em até ${target} movimentos para ganhar ${starStr(stars + 1)}`;
+        } else {
+          const streak = currentStreak();
+          $('win-goal').textContent = streak > 1
+            ? `🔥 ${streak} dias seguidos! Volte amanhã para manter a sequência.`
+            : `Perfeito! Será que consegue um tempo ainda melhor?`;
+        }
+
+        const nextIdx = LEVELS.findIndex((l) => l.size === size) + 1;
+        const next = LEVELS[nextIdx];
+        $('next').hidden = !next;
+        if (next) $('next').textContent = `Próximo: ${next.size}×${next.size} →`;
+        $('next').onclick = () => next && newGame(next.size);
+
+        $('win').hidden = false;
+        $('again').focus();
+        if (!reduceMotion) confetti(stars);
+      }
+
+      $('again').onclick = () => newGame();
+      $('shuffle').onclick = () => newGame();
+      $('share').onclick = async () => {
+        const url = `${location.origin}/sliding-puzzle`;
+        const text = `Resolvi o Sliding Puzzle ${size}×${size} em ${moves} movimentos e ${fmtTime(elapsed)} ${starStr(starsFor(size, moves))}. Consegue fazer melhor?`;
+        try {
+          if (navigator.share) await navigator.share({ title: 'Sliding Puzzle', text, url });
+          else { await navigator.clipboard.writeText(`${text} ${url}`); toast('Copiado! Cole para desafiar alguém.'); }
+        } catch { /* usuário cancelou */ }
+      };
+      $('win').addEventListener('click', (e) => { if (e.target.id === 'win') $('win').hidden = true; });
+
+      // ---------- Confete ----------
+      function stopConfetti() {
+        cancelAnimationFrame(confettiRaf);
+        const c = $('confetti');
+        c.getContext('2d').clearRect(0, 0, c.width, c.height);
+      }
+
+      function confetti(stars) {
+        const canvas = $('confetti');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = innerWidth * dpr;
+        canvas.height = innerHeight * dpr;
+        ctx.scale(dpr, dpr);
+        const colors = ['#6366f1', '#a78bfa', '#22d3ee', '#facc15', '#f472b6', '#34d399'];
+        const count = 80 + stars * 50;
+        const parts = Array.from({ length: count }, () => ({
+          x: innerWidth / 2 + (Math.random() - 0.5) * 120,
+          y: innerHeight * 0.45,
+          vx: (Math.random() - 0.5) * 16,
+          vy: -Math.random() * 16 - 6,
+          w: 6 + Math.random() * 6,
+          h: 8 + Math.random() * 8,
+          r: Math.random() * Math.PI,
+          vr: (Math.random() - 0.5) * 0.3,
+          c: colors[Math.floor(Math.random() * colors.length)],
+        }));
+        const end = performance.now() + 4000;
+        (function frame(now) {
+          ctx.clearRect(0, 0, innerWidth, innerHeight);
+          let alive = false;
+          for (const p of parts) {
+            p.vy += 0.35; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+            if (p.y < innerHeight + 20) alive = true;
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.r);
+            ctx.fillStyle = p.c;
+            ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.r * 2)));
+            ctx.restore();
+          }
+          if (alive && now < end) confettiRaf = requestAnimationFrame(frame);
+          else ctx.clearRect(0, 0, innerWidth, innerHeight);
+        })(performance.now());
+      }
+
+      // ---------- Início ----------
+      window.addEventListener('resize', () => { board.classList.add('no-anim'); layout(); requestAnimationFrame(() => board.classList.remove('no-anim')); });
+      renderStreak();
+      newGame(LEVELS.some((l) => l.size === data.lastSize) ? data.lastSize : 3);
+
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+    })();
     </script>
   </body>
 </html>
